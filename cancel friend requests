@@ -1,0 +1,87 @@
+(async function cancelFollowRequests() {
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+    
+    const ACTION_DELAY = 3000; // Wait for card removal
+    const MENU_CHECK_DELAY = 500;
+    const MAX_ACTIONS = 500;
+    
+    let actionCount = 0;
+    let stuckCount = 0;
+    const MAX_STUCK_ATTEMPTS = 3;
+    
+    console.log('🔄 Starting to cancel follow requests...');
+    
+    while (actionCount < MAX_ACTIONS) {
+        // Find "Cancel request" buttons
+        const cancelButtons = Array.from(document.querySelectorAll('[aria-label="Cancel request"]'));
+        
+        if (cancelButtons.length === 0) {
+            console.log('No more "Cancel request" buttons found.');
+            window.scrollTo(0, document.body.scrollHeight);
+            await delay(2000);
+            
+            // Check again after scroll
+            if (document.querySelectorAll('[aria-label="Cancel request"]').length === 0) {
+                console.log('✅ No more pending requests to cancel.');
+                break;
+            }
+            continue;
+        }
+        
+        // Get the first button and find the person's name
+        const button = cancelButtons[0];
+        const card = button.closest('.x6s0dn4.x1obq294');
+        
+        if (!card) {
+            console.log('⚠️ Could not find card container');
+            button.remove();
+            await delay(500);
+            continue;
+        }
+        
+        // Extract person's name from the card
+        const nameElement = card.querySelector('a[href*="/"] span[dir="auto"]');
+        const personName = nameElement ? nameElement.textContent : 'Unknown';
+        
+        console.log(`Canceling request for: ${personName}`);
+        
+        // Scroll card into view
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await delay(MENU_CHECK_DELAY);
+        
+        // Click cancel button
+        button.click();
+        actionCount++;
+        console.log(`✓ Canceled request ${actionCount}/${MAX_ACTIONS}`);
+        
+        // Wait for DOM to update
+        await delay(ACTION_DELAY);
+        
+        // Verify the card was removed
+        const stillExists = document.body.contains(card);
+        if (stillExists) {
+            stuckCount++;
+            console.log(`⚠️ Card still exists (attempt ${stuckCount}/${MAX_STUCK_ATTEMPTS})`);
+            
+            if (stuckCount >= MAX_STUCK_ATTEMPTS) {
+                console.log('🔧 Force removing stuck card...');
+                card.remove();
+                stuckCount = 0;
+            }
+            await delay(1000);
+        } else {
+            stuckCount = 0; // Reset on success
+        }
+        
+        // Periodic scroll to load more
+        if (actionCount % 5 === 0) {
+            window.scrollTo(0, document.body.scrollHeight);
+            await delay(1500);
+            window.scrollTo(0, 0);
+            await delay(500);
+        }
+    }
+    
+    console.log(`\n✅ Complete: ${actionCount} requests canceled`);
+    console.log('Refresh the page to see updated list.');
+})();
