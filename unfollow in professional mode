@@ -1,0 +1,86 @@
+// Fixed: Wait for DOM updates after unfollow
+(async function unfollowAll() {
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+    
+    const DELAY_BETWEEN_ACTIONS = 4000; // Wait for card to be removed
+    const MENU_DELAY = 1500;
+    const MAX_UNFOLLOWS = 500;
+    
+    let unfollowCount = 0;
+    let previousPersonName = '';
+    
+    console.log('Starting unfollow process...');
+    
+    while (unfollowCount < MAX_UNFOLLOWS) {
+        const moreButtons = document.querySelectorAll('[aria-label^="More options for"]');
+        
+        if (moreButtons.length === 0) {
+            console.log('No more profiles found.');
+            window.scrollTo(0, document.body.scrollHeight);
+            await delay(2000);
+            
+            if (document.querySelectorAll('[aria-label^="More options for"]').length === 0) {
+                break;
+            }
+            continue;
+        }
+        
+        const button = moreButtons[0];
+        const personName = button.getAttribute('aria-label').replace('More options for ', '');
+        
+        // Check if we're stuck on the same person
+        if (personName === previousPersonName) {
+            console.log(`Still seeing ${personName}, waiting longer for DOM update...`);
+            await delay(3000);
+            
+            // Check again after waiting
+            const recheckButtons = document.querySelectorAll('[aria-label^="More options for"]');
+            if (recheckButtons.length > 0) {
+                const recheckName = recheckButtons[0].getAttribute('aria-label').replace('More options for ', '');
+                if (recheckName === previousPersonName) {
+                    console.log(`Stuck on ${personName}. Moving to next by removing element...`);
+                    recheckButtons[0].closest('[class*="x6s0dn4"]')?.remove();
+                    await delay(1000);
+                    continue;
+                }
+            }
+        }
+        
+        console.log(`Opening menu for ${personName}...`);
+        button.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await delay(500);
+        
+        button.click();
+        await delay(MENU_DELAY);
+        
+        // Find unfollow button
+        let unfollowButton = null;
+        const menuItems = Array.from(document.querySelectorAll('[role="menuitem"]'));
+        unfollowButton = menuItems.find(item => {
+            const text = item.textContent.toLowerCase();
+            return text.includes('unfollow') || text === 'following';
+        });
+        
+        if (unfollowButton) {
+            unfollowButton.click();
+            previousPersonName = personName;
+            unfollowCount++;
+            console.log(`✓ Unfollowed ${personName} (${unfollowCount}/${MAX_UNFOLLOWS})`);
+            console.log('Waiting for page to update...');
+            await delay(DELAY_BETWEEN_ACTIONS);
+        } else {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+            console.log(`⚠️ Could not find unfollow button for ${personName}`);
+            await delay(1000);
+        }
+        
+        // Scroll every few actions
+        if (unfollowCount % 3 === 0) {
+            window.scrollTo(0, document.body.scrollHeight);
+            await delay(1500);
+        }
+    }
+    
+    console.log(`\n✅ Complete: ${unfollowCount} unfollowed`);
+    console.log('Refresh the page to continue.');
+})();
